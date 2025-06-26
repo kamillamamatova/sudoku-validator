@@ -1,66 +1,60 @@
 import SwiftUI
 
 struct ContentView: View{
-    // A sample of a correctly solved Sudoku board which will be used for testing
-    let sampleBoard: [[Int]] = [
-        [5, 3, 4, 6, 7, 8, 9, 1, 2],
-        [6, 7, 2, 1, 9, 5, 3, 4, 8],
-        [1, 9, 8, 3, 4, 2, 5, 6, 7],
-        [8, 5, 9, 7, 6, 1, 4, 2, 3],
-        [4, 2, 6, 8, 5, 3, 7, 9, 1],
-        [7, 1, 3, 9, 2, 4, 8, 5, 6],
-        [9, 6, 1, 5, 3, 7, 2, 8, 4],
-        [2, 8, 7, 4, 1, 9, 6, 3, 5],
-        [3, 4, 5, 2, 8, 6, 1, 7, 9]
-    ]
+    // State variable to hold the image taken by the user
+    // It's an optional because there is no image at the start
+    @State private var capturedImage: UIImage? = nil
     
-    // @State is a special property wrapper that tells SwiftUI to watch this variable
-    // If 'validationMessage' changes, the UI will automatically update itself
-    @State private var validationMessage: String = "Ready to validate."
+    // State variable to control when to show the camera view
+    @State private var isShowingCamera = false
     
     var body: some View{
         // VStack arranges views vertically
-        VStack(spacing: 30){
+        VStack(spacing: 20){
             Text("Sudoku Validator")
                 .font(.largeTitle)
                 .fontWeight(.bold)
             
-            // This Text view displays the @State variable
-            Text(validationMessage)
-                .font(.title2)
-                .fontWeight(.medium)
-                .foregroundColor(Color(red: 1.0, green: 0.0, blue: 0.0, opacity: 1.0))
-                .foregroundStyle(.black)
-                .padding()
-                .background(Color.gray)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+            // The there is an image, it will be displayed here
+            if let image = capturedImage{
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 300, height: 300)
+                    .border(Color.gray, width: 2)
+            }
+            else{
+                // If no image has been captured yet, this shows a placeholder
+                ZStack{
+                    Rectangle()
+                        .fill(Color(.secondarySystemBackground))
+                        .frame(width: 300, height: 300)
+                        .border(Color.gray, width: 2)
+                    
+                    Text("No image scanned")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                }
+            }
             
-            // The button that will trigger the logic
-            Button("Validate Sample Board"){
-                // This code runs when the button is tapped
-                
-                // Creates an instance of our validator
-                let validator = SudokuValidator()
-                
-                // Runs the validation function on the sample board
-                let isCorrect = validator.isValid(board: sampleBoard)
-                
-                // Updates the message based on the result
-                // Since 'validationMessage' is a @State variable, the UI will chnage
-                if isCorrect{
-                    validationMessage = "Correct!"
-                }
-                else{
-                    validationMessage = "Incorrect! Check the board."
-                }
+            // The button that triggers the camera
+            Button("Scan with Camera"){
+                // Flips the switch to true
+                self.isShowingCamera = true
             }
             .font(.title)
             .padding()
-            .background(Color.gray)
-            .foregroundStyle(.black)
+            .background(Color.blue)
+            .foregroundStyle(.white)
             .clipShape(Capsule())
         }
         .padding()
+        // Presents the camera view
+        // Listens to the 'isShowingCamera' variable. The sheet appears when it's true
+        .sheet(isPresented: $isShowingCamera){
+            // Passes a 'binding' ($) to our captureImage state, so the ImagePicker can update directly
+            ImagePicker(selectedImage: $capturedImage)
+        }
     }
 }
 
