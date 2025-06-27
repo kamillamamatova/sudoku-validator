@@ -8,6 +8,9 @@ struct ContentView: View{
     // State variable to control when to show the camera view
     @State private var isShowingCamera = false
     
+    // State variable to hold the rext recognized by the OCR Processor
+    @State private var ocrText: String = ""
+    
     var body: some View{
         // VStack arranges views vertically
         VStack(spacing: 20){
@@ -47,6 +50,46 @@ struct ContentView: View{
             .background(Color.blue)
             .foregroundStyle(.white)
             .clipShape(Capsule())
+            
+            // This button only appears when after an image has been selected
+            if capturedImage != nil{
+                Button("Process Image for Numbers"){
+                    // Makes sure there is an image to process
+                    guard let imageToProcess = capturedImage
+                    else{
+                        return
+                    }
+                    
+                    let ocrProcessor = OCRProcessor()
+                    self.ocrText = "Processing..."
+                    
+                    // Calls the processor. This happens in the background.
+                    ocrProcessor.processImage(imageToProcess){ recognizedStrings in
+                        // Completion handler, called when OCR is done
+                        DispatchQueue.main.async{
+                            if recognizedStrings.isEmpty{
+                                self.ocrText = "No numbers found."
+                            }
+                            else{
+                                // Joins all the found numbers into a single string for display
+                                self.ocrText = recognizedStrings.joined(separator: ", ")
+                            }
+                        }
+                    }
+                }
+                .font(.title2)
+                .padding()
+                .background(Color.green)
+                .foregroundStyle(.white)
+                .clipShape(Capsule())
+                
+                // Makes sure the text doesn't get cut off
+                ScrollView{
+                    Text(ocrText)
+                        .font(.body)
+                        .padding()
+                }
+            }
         }
         .padding()
         // Presents the camera view
