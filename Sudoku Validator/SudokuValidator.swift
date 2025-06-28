@@ -1,13 +1,32 @@
 import Foundation
 
+// Defines an enum for more descriptive validation results
+enum SudokuValidationResult{
+    case validAndComplete
+    case validAndImcomplete
+    case invalid
+}
+
 struct SudokuValidator{
-    // The main function that checks the entire board
-    // Has 3 helper functions to check rows, columns, and the 3x3 squares
-    func isValid(board: [[Int]]) -> Bool{
-        return areRowsValid(board: board) &&
-            areColumnsValid(board: board) &&
-            areSquaresValid(board: board)
+    // Returns the new enum
+    func validate(board: [[Int]]) -> SudokuValidationResult{
+        let hasNoDuplicates = areRowsValid(board: board) && areColumnsValid(board: board) && areSquaresValid(board: board)
+        
+        if !hasNoDuplicates{
+            return .invalid
+        }
+        
+        // Checks if there are any empty cells
+        let isBoardComplete = !board.flatMap { $0 }.contains(0)
+        
+        if isBoardComplete{
+            return .validAndComplete
+        }
+        else{
+            return .validAndImcomplete
+        }
     }
+    
     // Checks if all the rows are valid
     private func areRowsValid(board: [[Int]]) -> Bool{
         for row in board{
@@ -61,8 +80,18 @@ struct SudokuValidator{
     // Checks if a given array of 9 numbers is valid
     // A set is valid if it contains numbers 1-9 with no duplicates
     // 'Set' automatically handles duplicates
-    private func isSetValid(_ set: [Int]) -> Bool{
-        let required: Set<Int> = Set(1...9)
-        return Set(set) == required
+    private func isSetValid(_ set: [Int]) -> Bool {
+        var seen: Set<Int> = []
+        for number in set {
+            if number != 0 {
+                if seen.contains(number) {
+                    // Found a duplicate non-zero number
+                    return false
+                }
+                seen.insert(number)
+            }
+        }
+        // No duplicates found
+        return true
     }
 }

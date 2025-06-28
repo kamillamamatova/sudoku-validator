@@ -75,18 +75,18 @@ struct ContentView: View{
                         let imageFrame = CGRect(origin: .zero, size: imageToProcess.size)
                         
                         // Makes sure the image frame converts coordinates correctly
-                        let sudokuGrid = gridProcessor.process(observations: observations, in: imageFrame)
+                        let grid = gridProcessor.process(observations: observations, in: imageFrame)
                         
                         // Debug
-                        print("Grid Sent to Validator")
-                        for row in sudokuGrid{
-                            print(row)
+                        print("OCR Grid:")
+                        for row in grid {
+                            print(row.map { String($0) }.joined(separator: " "))
                         }
-                        print("--------------------")
+
                         
                         // Validates the final grid
                         let validator = SudokuValidator()
-                        let isValid = validator.isValid(board: sudokuGrid)
+                        let isValid = validator.isValid(board: grid)
                         
                         // Updates the UI on the main thread
                         DispatchQueue.main.async{
