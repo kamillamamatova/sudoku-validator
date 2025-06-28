@@ -77,6 +77,13 @@ struct ContentView: View{
                         // Makes sure the image frame converts coordinates correctly
                         let sudokuGrid = gridProcessor.process(observations: observations, in: imageFrame)
                         
+                        // Debug
+                        print("Grid Sent to Validator")
+                        for row in sudokuGrid{
+                            print(row)
+                        }
+                        print("--------------------")
+                        
                         // Validates the final grid
                         let validator = SudokuValidator()
                         let isValid = validator.isValid(board: sudokuGrid)
@@ -84,10 +91,10 @@ struct ContentView: View{
                         // Updates the UI on the main thread
                         DispatchQueue.main.async{
                             if isValid{
-                                self.validationMessage = "Puzzle is valid!"
+                                self.validationMessage = "Puzzle is Valid!"
                             }
                             else{
-                                self.validationMessage = "Puzzle is incorrect."
+                                self.validationMessage = "Puzzle is Incorrect."
                             }
                         }
                     }

@@ -23,12 +23,6 @@ class OCRProcessor{
                 completion([])
                 return
             }
-        
-            // Extracts the recognized text strings from the observation
-            let recognizedStrings = observations.compactMap{ observation in
-                // Returns the top candidate for recognition
-                return observation.topCandidates(1).first?.string
-            }
             
             // Calls the main completion handler with the results
             completion(observations)
