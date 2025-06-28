@@ -27,34 +27,45 @@ class GridProcessor{
             return RecognizedDigit(text: "\(digit)", center: center)
         }
         
-        // Groups digits into 9 row bands using y-positions
-        let sortedByY = recognizedDigits.sorted { $0.center.y < $1.center.y }
-        var rows: [[RecognizedDigit]] = Array(repeating: [], count: 9)
-        let rowHeight = frame.height / 9
-        
-        for digit in sortedByY{
-            let estimatedRow = Int(digit.center.y / rowHeight)
-            // Clamp to 0-8
-            let row = min(max(estimatedRow, 0), 8)
-            rows[row].append(digit)
+        // Returns an empty grid if no digits are found
+        guard !recognizedDigits.isEmpty else{
+            return Array(repeating: Array(repeating: 0, count: 9), count: 9)
         }
         
-        // Builds the 9x9 integer grid from the sorted digits
-        // Assumes a reasonable complete grid has been found
-        var grid = Array(repeating: Array(repeating: 0, count: 9), count: 9)
-        let colWidth = frame.width / 9
+        // Calculates a precise bounding box around the detected digits
+        var minX = CGFloat.greatestFiniteMagnitude
+        var minY = CGFloat.greatestFiniteMagnitude
+        var maxX = CGFloat.leastNormalMagnitude
+        var maxY = CGFloat.leastNormalMagnitude
         
-        for(rowIndex, digitsInRow) in rows.enumerated(){
-            // Calculates the estimated column for each digit
-            for digit in digitsInRow{
-                let estimatedCol = Int(digit.center.x / colWidth)
-                // Clamp to 0-8
-                let col = min(max(estimatedCol, 0), 8)
-                
-                // Places the digit in the grid at its estimated row and column
-                if grid[rowIndex][col] == 0{
-                    grid[rowIndex][col] = Int(digit.text) ?? 0
-                }
+        for digit in recognizedDigits{
+            minX = min(minX, digit.center.x)
+            minY = min(minY, digit.center.y)
+            maxX = max(maxX, digit.center.x)
+            maxY = max(maxY, digit.center.y)
+        }
+        
+        let digitAreaWidth = maxX - minX
+        let digitAreaHeight = maxY - minY
+        
+        var grid = Array(repeating: Array(repeating: 0, count: 9), count: 9)
+        
+        // Uses the more precise dimensions of the digit area, with a little padding
+        let colWidth = digitAreaWidth / 9.0
+        let rowHeight = digitAreaHeight / 9.0
+        
+        for digit in recognizedDigits{
+            // Estimates position based on the grid
+            let estimatedCol = Int((digit.center.x - minX) / colWidth)
+            let estimatedRow = Int((digit.center.y - minY) / rowHeight)
+            
+            // Clamps to 0-8 to avoid out of bound errors
+            let col = min(max(estimatedCol, 0), 8)
+            let row = min(max(estimatedRow, 0), 8)
+            
+            // Places the digit in the grid at its estimated row and column
+            if grid[row][col] == 0{
+                grid[row][col] = Int(digit.text) ?? 0
             }
         }
         
