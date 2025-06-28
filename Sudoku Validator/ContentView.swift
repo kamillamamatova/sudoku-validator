@@ -8,8 +8,8 @@ struct ContentView: View{
     // State variable to control when to show the camera view
     @State private var isShowingCamera = false
     
-    // State variable to hold the rext recognized by the OCR Processor
-    @State private var ocrText: String = ""
+    // State variable to hold the final validation result
+    @State private var validationMessage: String = ""
     
     var body: some View{
         // VStack arranges views vertically
@@ -41,11 +41,13 @@ struct ContentView: View{
             }
             
             // The button that triggers the camera
-            Button("Scan with Camera"){
+            Button("Select Sudoku Image"){
+                // Clears previous validation message
+                self.validationMessage = ""
                 // Flips the switch to true
                 self.isShowingCamera = true
             }
-            .font(.title)
+            .font(.title2)
             .padding()
             .background(Color.blue)
             .foregroundStyle(.white)
@@ -60,19 +62,32 @@ struct ContentView: View{
                         return
                     }
                     
+                    self.validationMessage = "Processing..."
+                    
                     let ocrProcessor = OCRProcessor()
-                    self.ocrText = "Processing..."
                     
                     // Calls the processor. This happens in the background.
-                    ocrProcessor.processImage(imageToProcess){ recognizedStrings in
-                        // Completion handler, called when OCR is done
+                    ocrProcessor.processImage(imageToProcess){ observations in
+                        // Processes the observationsto build a 9x9 grid
+                        let gridProcessor = GridProcessor()
+                        
+                        // Creates a CGRect from the image's size, with an origin at (0,0)
+                        let imageFrame = CGRect(origin: .zero, size: imageToProcess.size)
+                        
+                        // Makes sure the image frame converts coordinates correctly
+                        let sudokuGrid = gridProcessor.process(observations: observations, in: imageFrame)
+                        
+                        // Validates the final grid
+                        let validator = SudokuValidator()
+                        let isValid = validator.isValid(board: sudokuGrid)
+                        
+                        // Updates the UI on the main thread
                         DispatchQueue.main.async{
-                            if recognizedStrings.isEmpty{
-                                self.ocrText = "No numbers found."
+                            if isValid{
+                                self.validationMessage = "Puzzle is valid!"
                             }
                             else{
-                                // Joins all the found numbers into a single string for display
-                                self.ocrText = recognizedStrings.joined(separator: ", ")
+                                self.validationMessage = "Puzzle is incorrect."
                             }
                         }
                     }
@@ -83,12 +98,11 @@ struct ContentView: View{
                 .foregroundStyle(.white)
                 .clipShape(Capsule())
                 
-                // Makes sure the text doesn't get cut off
-                ScrollView{
-                    Text(ocrText)
-                        .font(.body)
-                        .padding()
-                }
+                // Displays the final validation message
+                Text(validationMessage)
+                    .font(.title3)
+                    .fontWeight(.medium)
+                    .padding()
             }
         }
         .padding()

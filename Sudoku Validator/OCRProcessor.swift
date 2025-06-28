@@ -5,7 +5,7 @@ import UIKit
 class OCRProcessor{
     // Takes a UIImage and uses the Vision framework to find text in it
     // Then calls a completion handler with the results
-    func processImage(_ image: UIImage, completion: @escaping ([String]) -> Void){
+    func processImage(_ image: UIImage, completion: @escaping ([VNRecognizedTextObservation]) -> Void){
         // Ensures there is a valid CGImage to work with
         guard let cgImage = image.cgImage else{
             print("Failed to get CGImage from UIImage.")
@@ -31,7 +31,7 @@ class OCRProcessor{
             }
             
             // Calls the main completion handler with the results
-            completion(recognizedStrings)
+            completion(observations)
         }
         
         // Configures the request for more accurate results
