@@ -55,12 +55,11 @@ struct ContentView: View{
             
             // This button only appears when after an image has been selected
             if capturedImage != nil{
-                Button("Process Image for Numbers"){
-                    // Makes sure there is an image to process
-                    guard let imageToProcess = capturedImage
-                    else{
-                        return
-                    }
+                Button("Process Image for Numbers", action: {
+                        // Makes sure there is an image to process
+                        guard let imageToProcess = capturedImage else {
+                            return
+                        }
                     
                     self.validationMessage = "Processing..."
                     
@@ -76,29 +75,25 @@ struct ContentView: View{
                         
                         // Makes sure the image frame converts coordinates correctly
                         let grid = gridProcessor.process(observations: observations, in: imageFrame)
-                        
-                        // Debug
-                        print("OCR Grid:")
-                        for row in grid {
-                            print(row.map { String($0) }.joined(separator: " "))
-                        }
 
-                        
                         // Validates the final grid
                         let validator = SudokuValidator()
-                        let isValid = validator.isValid(board: grid)
+                        let result = validator.validate(board: grid)
                         
                         // Updates the UI on the main thread
                         DispatchQueue.main.async{
-                            if isValid{
-                                self.validationMessage = "Puzzle is Valid!"
-                            }
-                            else{
-                                self.validationMessage = "Puzzle is Incorrect."
+                            // Updates the message based on the more detailed result
+                            switch result{
+                            case .validAndComplete:
+                                self.validationMessage = "This is a valid and complete puzzle!"
+                            case .validAndIncomplete:
+                                self.validationMessage = "This puzzle is valid so far, but incomplete."
+                            case .invalid:
+                                self.validationMessage = "This puzzle is incorrect."
                             }
                         }
                     }
-                }
+                })
                 .font(.title2)
                 .padding()
                 .background(Color.green)
@@ -122,7 +117,10 @@ struct ContentView: View{
     }
 }
 
-// Generates the preview in Xcode
-#Preview{
-    ContentView()
+#if DEBUG
+struct ContentView_Previews: PreviewProvider{
+    static var previews: some View{
+        ContentView()
+    }
 }
+#endif

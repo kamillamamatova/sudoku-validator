@@ -3,7 +3,7 @@ import Foundation
 // Defines an enum for more descriptive validation results
 enum SudokuValidationResult{
     case validAndComplete
-    case validAndImcomplete
+    case validAndIncomplete
     case invalid
 }
 
@@ -23,7 +23,7 @@ struct SudokuValidator{
             return .validAndComplete
         }
         else{
-            return .validAndImcomplete
+            return .validAndIncomplete
         }
     }
     
