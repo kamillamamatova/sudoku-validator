@@ -65,12 +65,13 @@ struct SudokuValidator{
         var seenNumbers = Set<Int>()
         for number in set{
             // If a number is outside the 1-9 range, it's invalid
-            if number < 1 || number > 9{
-                return false
+            if number == 0{
+                // Skips since 0 means empty
+                continue
             }
             // If a number is a duplicate
             if seenNumbers.contains(number){
-                return false;
+                return false
             }
             seenNumbers.insert(number)
         }
