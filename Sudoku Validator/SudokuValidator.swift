@@ -62,20 +62,7 @@ struct SudokuValidator{
     // A set is valid if it contains numbers 1-9 with no duplicates
     // 'Set' automatically handles duplicates
     private func isSetValid(_ set: [Int]) -> Bool{
-        var seenNumbers = Set<Int>()
-        for number in set{
-            // If a number is outside the 1-9 range, it's invalid
-            if number == 0{
-                // Skips since 0 means empty
-                continue
-            }
-            // If a number is a duplicate
-            if seenNumbers.contains(number){
-                return false
-            }
-            seenNumbers.insert(number)
-        }
-        // The set is valid if the loop is valid
-        return true;
+        let required: Set<Int> = Set(1...9)
+        return Set(set) == required
     }
 }
