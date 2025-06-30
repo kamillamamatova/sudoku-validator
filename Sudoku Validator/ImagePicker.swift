@@ -1,9 +1,9 @@
 import SwiftUI
 import UIKit
 
-// This is the bridge between UIKit's camera view and SwiftUI
-struct ImagePicker: UIViewControllerRepresentable {
-    // This binding will hold the image the user selects or captures
+// The bridge between UIKit's camera view and SwiftUI
+struct ImagePicker: UIViewControllerRepresentable{
+    // Holds the image the user selects or captures
     // A 'Binding' is a special two way connection to a @State variable in another view
     @Binding var selectedImage: UIImage?
     
@@ -41,7 +41,7 @@ struct ImagePicker: UIViewControllerRepresentable {
         Coordinator(parent: self)
     }
     
-    // Helper object that handles communication from the UIImagePickerController
+    // Handles communication from the UIImagePickerController
     final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate{
         var parent: ImagePicker
         
@@ -49,7 +49,7 @@ struct ImagePicker: UIViewControllerRepresentable {
             self.parent = parent
         }
         
-        // Gets called when the user finishes taking a picture
+        // Called when the user finishes taking a picture
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]){
             // Unwraps the image from the dictionary and assigns it to the binding
             if let image = info[.originalImage] as? UIImage{
