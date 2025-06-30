@@ -1,57 +1,134 @@
 import Foundation
 import Vision
 import UIKit
+import CoreImage
+import CoreImage.CIFilterBuiltins
 
 class GridProcessor {
+
+    // Main function to orchestrate the multi-pass processing
     func process(image: UIImage, completion: @escaping ([[Int]]) -> Void) {
-        guard let cgImage = image.cgImage else {
-            completion([])
-            return
+        var imageVersions: [CGImage] = []
+
+        // Pass 1: The original image
+        if let originalCgImage = image.cgImage {
+            imageVersions.append(originalCgImage)
+        }
+        // Pass 2: A simple contrast-enhanced image
+        if let contrastCgImage = enhanceWithSimpleContrast(image: image)?.cgImage {
+            imageVersions.append(contrastCgImage)
+        }
+        // Pass 3: A high-contrast monochrome image
+        if let monochromeCgImage = enhanceWithMonochrome(image: image)?.cgImage {
+            imageVersions.append(monochromeCgImage)
         }
 
-        let requestHandler = VNImageRequestHandler(cgImage: cgImage, orientation: .up)
+        var recognizedGrids: [[[Int]]] = []
+        let dispatchGroup = DispatchGroup()
+        let resultsLock = NSLock()
+
+        // Perform text recognition on each version of the image
+        for version in imageVersions {
+            dispatchGroup.enter()
+            recognizeText(in: version) { grid in
+                resultsLock.lock()
+                recognizedGrids.append(grid)
+                resultsLock.unlock()
+                dispatchGroup.leave()
+            }
+        }
+
+        // After all recognition passes are complete, merge the results
+        dispatchGroup.notify(queue: .main) {
+            let finalGrid = self.merge(grids: recognizedGrids)
+            completion(finalGrid)
+        }
+    }
+
+    // Merges multiple grid results into one master grid
+    private func merge(grids: [[[Int]]]) -> [[Int]] {
+        var masterGrid = Array(repeating: Array(repeating: 0, count: 9), count: 9)
+        for row in 0..<9 {
+            for col in 0..<9 {
+                // Find the first non-zero number for the cell from any grid
+                for grid in grids {
+                    if grid[row][col] != 0 {
+                        masterGrid[row][col] = grid[row][col]
+                        break // Move to the next cell once a number is found
+                    }
+                }
+            }
+        }
+        return masterGrid
+    }
+
+    // Filter for simple contrast enhancement
+    private func enhanceWithSimpleContrast(image: UIImage) -> UIImage? {
+        guard let ciImage = CIImage(image: image) else { return nil }
+        let context = CIContext(options: nil)
+        let filter = CIFilter.colorControls()
+        filter.inputImage = ciImage
+        filter.contrast = 2.0
         
+        if let outputImage = filter.outputImage, let cgImage = context.createCGImage(outputImage, from: outputImage.extent) {
+            return UIImage(cgImage: cgImage)
+        }
+        return nil
+    }
+
+    // Filter for high-contrast black & white
+    private func enhanceWithMonochrome(image: UIImage) -> UIImage? {
+        guard let ciImage = CIImage(image: image) else { return nil }
+        let context = CIContext(options: nil)
+        let filter = CIFilter.colorControls()
+        filter.inputImage = ciImage
+        filter.saturation = 0.0 // Grayscale
+        filter.contrast = 8.0  // High contrast
+        
+        if let outputImage = filter.outputImage, let cgImage = context.createCGImage(outputImage, from: ciImage.extent) {
+            return UIImage(cgImage: cgImage)
+        }
+        return nil
+    }
+
+    // The core text recognition function (runs on a single image version)
+    private func recognizeText(in cgImage: CGImage, completion: @escaping ([[Int]]) -> Void) {
+        let requestHandler = VNImageRequestHandler(cgImage: cgImage)
         let request = VNRecognizeTextRequest { (request, error) in
             var grid = Array(repeating: Array(repeating: 0, count: 9), count: 9)
-            
             guard let observations = request.results as? [VNRecognizedTextObservation], error == nil else {
                 completion(grid)
                 return
             }
-
             let frame = CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height)
             let cellWidth = frame.width / 9.0
             let cellHeight = frame.height / 9.0
-
             for observation in observations {
-                guard let candidate = observation.topCandidates(1).first,
-                      let digit = Int(candidate.string) else { continue }
-
+                guard let candidate = observation.topCandidates(1).first, let digit = Int(candidate.string) else { continue }
                 let boundingBox = VNImageRectForNormalizedRect(observation.boundingBox, Int(frame.width), Int(frame.height))
                 let center = CGPoint(x: boundingBox.midX, y: boundingBox.midY)
-
-                let col = Int(center.x / cellWidth)
                 let row = 8 - Int(center.y / cellHeight)
-
+                let col = Int(center.x / cellWidth)
                 if row >= 0 && row < 9 && col >= 0 && col < 9 {
-                    if grid[row][col] == 0 {
-                        grid[row][col] = digit
-                    }
+                    if grid[row][col] == 0 { grid[row][col] = digit }
                 }
             }
             completion(grid)
         }
         
+        if #available(iOS 16.0, *) { request.revision = VNRecognizeTextRequestRevision3 }
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = false
-        // This setting is crucial to force the recognizer to find small, individual digits.
-        request.minimumTextHeight = 0.015
+        request.minimumTextHeight = 0.01
         request.customWords = ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
-
-        do {
-            try requestHandler.perform([request])
-        } catch {
-            completion(Array(repeating: Array(repeating: 0, count: 9), count: 9))
+        
+        // Perform the request in a background thread
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                try requestHandler.perform([request])
+            } catch {
+                completion(Array(repeating: Array(repeating: 0, count: 9), count: 9))
+            }
         }
     }
 }
