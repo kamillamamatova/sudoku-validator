@@ -130,15 +130,20 @@ class GridProcessor{
     }
     
     // Merges multiple grid results into one master grid
-    private func merge(grids: [[[Int]]]) -> [[Int]]{
+    private func merge(grids: [[[Int]]]) -> [[Int]] {
         var masterGrid = Array(repeating: Array(repeating: 0, count: 9), count: 9)
-        for row in 0..<9{
-            for col in 0..<9{
-                for grid in grids{
-                    if grid[row][col] != 0{
-                        masterGrid[row][col] = grid[row][col]
-                        break
+        for row in 0..<9 {
+            for col in 0..<9 {
+                var counts: [Int: Int] = [:]
+                for grid in grids {
+                    let number = grid[row][col]
+                    if number != 0 {
+                        counts[number, default: 0] += 1
                     }
+                }
+                // Find the number with the highest count
+                if let mostFrequentNumber = counts.max(by: { $0.value < $1.value })?.key {
+                    masterGrid[row][col] = mostFrequentNumber
                 }
             }
         }
