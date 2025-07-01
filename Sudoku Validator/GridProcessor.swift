@@ -47,7 +47,7 @@ class GridProcessor{
             imageVersions.append(originalCgImage)
         }
         // Image enhancement filters
-        if let contrastCgImage = enhanceWithSimpleContrast(image: image){
+        if let contrastCgImage = enhanceWithAdvancedContrast(image: image){
             imageVersions.append(contrastCgImage)
         }
         if let monochromeCgImage = enhanceWithMonochrome(image: image){
@@ -130,19 +130,19 @@ class GridProcessor{
     }
     
     // Merges multiple grid results into one master grid
-    private func merge(grids: [[[Int]]]) -> [[Int]] {
+    private func merge(grids: [[[Int]]]) -> [[Int]]{
         var masterGrid = Array(repeating: Array(repeating: 0, count: 9), count: 9)
-        for row in 0..<9 {
-            for col in 0..<9 {
+        for row in 0..<9{
+            for col in 0..<9{
                 var counts: [Int: Int] = [:]
-                for grid in grids {
+                for grid in grids{
                     let number = grid[row][col]
-                    if number != 0 {
+                    if number != 0{
                         counts[number, default: 0] += 1
                     }
                 }
                 // Find the number with the highest count
-                if let mostFrequentNumber = counts.max(by: { $0.value < $1.value })?.key {
+                if let mostFrequentNumber = counts.max(by:{ $0.value < $1.value })?.key{
                     masterGrid[row][col] = mostFrequentNumber
                 }
             }
@@ -150,14 +150,37 @@ class GridProcessor{
         return masterGrid
     }
 
-    // Filters for simple contrast enhancement
-    private func enhanceWithSimpleContrast(image: UIImage) -> CGImage?{
-        guard let ciImage = CIImage(image: image) else{ return nil }
+    // A more advanced filter to enhance local contrast and sharpen the image
+    private func enhanceWithAdvancedContrast(image: UIImage) -> CGImage? {
+        guard let ciImage = CIImage(image: image) else { return nil }
         let context = CIContext(options: nil)
-        let filter = CIFilter.colorControls()
-        filter.inputImage = ciImage
-        filter.contrast = 2.0
-        if let outputImage = filter.outputImage, let cgImage = context.createCGImage(outputImage, from: outputImage.extent){
+
+        // 1. Convert to grayscale
+        let grayscaleFilter = CIFilter.photoEffectMono()
+        grayscaleFilter.inputImage = ciImage
+        
+        guard let grayscaleOutput = grayscaleFilter.outputImage else { return nil }
+
+        // 2. Sharpen the image
+        let sharpenFilter = CIFilter.unsharpMask()
+        sharpenFilter.inputImage = grayscaleOutput
+        sharpenFilter.radius = 2.5
+        sharpenFilter.intensity = 0.7
+        
+        guard let sharpenedOutput = sharpenFilter.outputImage else { return nil }
+
+        // 3. Enhance local contrast
+        let toneCurveFilter = CIFilter.toneCurve()
+        toneCurveFilter.inputImage = sharpenedOutput
+        // CORRECTED: Used CGPoint instead of CIVector for the points
+        toneCurveFilter.point0 = CGPoint(x: 0.0, y: 0.0)
+        toneCurveFilter.point1 = CGPoint(x: 0.25, y: 0.15)
+        toneCurveFilter.point2 = CGPoint(x: 0.5, y: 0.5)
+        toneCurveFilter.point3 = CGPoint(x: 0.75, y: 0.85)
+        toneCurveFilter.point4 = CGPoint(x: 1.0, y: 1.0)
+
+        if let outputImage = toneCurveFilter.outputImage,
+           let cgImage = context.createCGImage(outputImage, from: outputImage.extent) {
             return cgImage
         }
         return nil
@@ -232,34 +255,26 @@ class GridProcessor{
     // Core text recognition function
     private func recognizeText(in cgImage: CGImage, orientation: UIImage.Orientation, completion: @escaping ([[Int]]) -> Void) {
         let visionOrientation = CGImagePropertyOrientation(orientation)
-        // Performs the Vision request on the image
         let requestHandler = VNImageRequestHandler(cgImage: cgImage, orientation: visionOrientation)
         
-        // Creates the text recognition request
         let request = VNRecognizeTextRequest { (request, error) in
-            // Creates an empty grid to fill in with results
             var grid = Array(repeating: Array(repeating: 0, count: 9), count: 9)
-            // Ensures the observations have no errors
             guard let observations = request.results as? [VNRecognizedTextObservation], error == nil else {
                 completion(grid)
                 return
             }
             
-            // Gets the dimensions of the image to calculate cell positions
             let frame = CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height)
             let cellWidth = frame.width / 9.0
             let cellHeight = frame.height / 9.0
             
-            // Loops through every piece of text of the Vision framework found
             for observation in observations {
-                // Gets the most likely candidate for the text and cleans it
                 guard let candidate = observation.topCandidates(1).first,
                       let digit = Int(candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)) else { continue }
                 
                 let boundingBox = VNImageRectForNormalizedRect(observation.boundingBox, Int(frame.width), Int(frame.height))
                 let center = CGPoint(x: boundingBox.midX, y: boundingBox.midY)
                 
-                // Correctly calculate the row based on Vision's coordinate system
                 let row = Int((frame.height - center.y) / cellHeight)
                 let col = Int(center.x / cellWidth)
                 
@@ -273,8 +288,8 @@ class GridProcessor{
         if #available(iOS 16.0, *) { request.revision = VNRecognizeTextRequestRevision3 }
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
-        // MODIFIED: Lowered minimumTextHeight to recognize smaller numbers
-        request.minimumTextHeight = 0.005
+        // MODIFIED: A final, balanced adjustment to the text height
+        request.minimumTextHeight = 0.008
         request.customWords = ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
         
         DispatchQueue.global(qos: .userInitiated).async {
