@@ -254,7 +254,7 @@ class GridProcessor{
                 let boundingBox = VNImageRectForNormalizedRect(observation.boundingBox, Int(frame.width), Int(frame.height))
                 let center = CGPoint(x: boundingBox.midX, y: boundingBox.midY)
                 
-                // Correctly calculate the row based on Vision's coordinate system
+                // Calculates the row based on Vision's coordinate system
                 let row = Int((frame.height - center.y) / cellHeight)
                 let col = Int(center.x / cellWidth)
                 
@@ -267,7 +267,8 @@ class GridProcessor{
         
         if #available(iOS 16.0, *){ request.revision = VNRecognizeTextRequestRevision3 }
         request.recognitionLevel = .accurate
-        request.usesLanguageCorrection = false
+        // Enables language correction to improve recognition
+        request.usesLanguageCorrection = true
         request.minimumTextHeight = 0.01
         request.customWords = ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
         
