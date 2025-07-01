@@ -3,65 +3,128 @@ import Vision
 import UIKit
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import ImageIO
+
+// Converts UIImage.Orientation to CGImagePropertyOrientation
+extension CGImagePropertyOrientation{
+    init(_ uiOrientation: UIImage.Orientation){
+        switch uiOrientation{
+            case .up: self = .up
+            case .upMirrored: self = .upMirrored
+            case .down: self = .down
+            case .downMirrored: self = .downMirrored
+            case .left: self = .left
+            case .leftMirrored: self = .leftMirrored
+            case .right: self = .right
+            case .rightMirrored: self = .rightMirrored
+            @unknown default: self = .up
+        }
+    }
+}
 
 class GridProcessor{
 
-    // Multi pass processing
     func process(image: UIImage, completion: @escaping ([[Int]]) -> Void){
+        // Finds the Sudoku grid in the image and crop to it.
+        findAndCropGrid(from: image) { croppedImage in
+            guard let imageToProcess = croppedImage else{
+                // Return an empty grid if cropping fails
+                completion(Array(repeating: Array(repeating: 0, count: 9), count: 9))
+                return
+            }
+
+            // Proceeds with the multi-pass text recognition on the cropped image
+            self.performTextRecognition(on: imageToProcess, completion: completion)
+        }
+    }
+
+    private func performTextRecognition(on image: UIImage, completion: @escaping ([[Int]]) -> Void){
         var imageVersions: [CGImage] = []
+        let imageOrientation = image.imageOrientation
 
         // Original unmodified image
         if let originalCgImage = image.cgImage{
             imageVersions.append(originalCgImage)
         }
-        // Simple contrast enhanced image
-        if let contrastCgImage = enhanceWithSimpleContrast(image: image)?.cgImage{
+        // Image enhancement filters
+        if let contrastCgImage = enhanceWithSimpleContrast(image: image){
             imageVersions.append(contrastCgImage)
         }
-        // High contrast monochrome image
-        if let monochromeCgImage = enhanceWithMonochrome(image: image)?.cgImage{
+        if let monochromeCgImage = enhanceWithMonochrome(image: image){
             imageVersions.append(monochromeCgImage)
         }
-        // Sharpened image
-        if let sharpenedCgImage = enhanceWithSharpen(image: image)?.cgImage{
+        if let sharpenedCgImage = enhanceWithSharpen(image: image){
             imageVersions.append(sharpenedCgImage)
         }
-        // NEW: Noir filter to improve text distinction
-        if let noirCgImage = enhanceWithNoir(image: image)?.cgImage {
+        if let noirCgImage = enhanceWithNoir(image: image){
             imageVersions.append(noirCgImage)
         }
 
-        // Stores the grid results from each of the recognition passes
         var recognizedGrids: [[[Int]]] = []
-        // Runs all the recognition tasks at the same time and gets a notification when they're all complete
         let dispatchGroup = DispatchGroup()
-        // Prevents a scenario where multiple tasks might try to write to the 'recognizedGrids' array simultaneously
         let resultsLock = NSLock()
 
-        // Performs text recognition on each version of the image
         for version in imageVersions{
-            // Signals to the group that a new task is starting
             dispatchGroup.enter()
-            // Calls the text recognition function for this specific image version
-            recognizeText(in: version){ grid in
-                // Acquires the lock to ensure safety before writing to the array
+            recognizeText(in: version, orientation: imageOrientation){ grid in
                 resultsLock.lock()
                 recognizedGrids.append(grid)
-                // Releases the lock so other tasks can write their results
                 resultsLock.unlock()
-                // Signals to the group that this specific tasks is now finished
                 dispatchGroup.leave()
             }
         }
 
-        // Merges the results
         dispatchGroup.notify(queue: .main){
             let finalGrid = self.merge(grids: recognizedGrids)
-            // Sends the completed grid back to the main UI
             completion(finalGrid)
         }
     }
 
+    // Finds and crops the grid
+    private func findAndCropGrid(from image: UIImage, completion: @escaping (UIImage?) -> Void){
+        guard let cgImage = image.cgImage else{
+            completion(nil)
+            return
+        }
+
+        let requestHandler = VNImageRequestHandler(cgImage: cgImage, orientation: CGImagePropertyOrientation(image.imageOrientation))
+        let request = VNDetectRectanglesRequest { (request, error) in
+            guard let observations = request.results as? [VNRectangleObservation],
+                  let largestRectangle = observations.first else{
+                // Returns to the original image if no rectangle is found
+                DispatchQueue.main.async{ completion(image) }
+                return
+            }
+
+            let cropRect = VNImageRectForNormalizedRect(largestRectangle.boundingBox, cgImage.width, cgImage.height)
+
+            if let croppedCGImage = cgImage.cropping(to: cropRect){
+                let croppedImage = UIImage(cgImage: croppedCGImage, scale: image.scale, orientation: image.imageOrientation)
+                DispatchQueue.main.async { completion(croppedImage) }
+            }
+            else{
+                DispatchQueue.main.async{ completion(image) } // Fallback
+            }
+        }
+
+        // Configures the request for finding a Sudoku grid
+        request.maximumObservations = 1
+        request.minimumAspectRatio = 0.8
+        request.maximumAspectRatio = 1.2
+        request.minimumSize = 0.5
+        request.minimumConfidence = 0.5
+
+        DispatchQueue.global(qos: .userInitiated).async{
+            do{
+                try requestHandler.perform([request])
+            }
+            catch{
+                print("Error detecting rectangles: \(error)")
+                DispatchQueue.main.async { completion(image) } // Fallback
+            }
+        }
+    }
+    
     // Merges multiple grid results into one master grid
     private func merge(grids: [[[Int]]]) -> [[Int]]{
         var masterGrid = Array(repeating: Array(repeating: 0, count: 9), count: 9)
@@ -79,20 +142,20 @@ class GridProcessor{
     }
 
     // Filters for simple contrast enhancement
-    private func enhanceWithSimpleContrast(image: UIImage) -> UIImage?{
+    private func enhanceWithSimpleContrast(image: UIImage) -> CGImage?{
         guard let ciImage = CIImage(image: image) else{ return nil }
         let context = CIContext(options: nil)
         let filter = CIFilter.colorControls()
         filter.inputImage = ciImage
         filter.contrast = 2.0
         if let outputImage = filter.outputImage, let cgImage = context.createCGImage(outputImage, from: outputImage.extent){
-            return UIImage(cgImage: cgImage)
+            return cgImage
         }
         return nil
     }
 
     // Filters for high contrast black & white
-    private func enhanceWithMonochrome(image: UIImage) -> UIImage?{
+    private func enhanceWithMonochrome(image: UIImage) -> CGImage?{
         guard let ciImage = CIImage(image: image) else{ return nil }
         let context = CIContext(options: nil)
         let filter = CIFilter.colorControls()
@@ -101,40 +164,41 @@ class GridProcessor{
         filter.saturation = 0.0
         filter.contrast = 8.0
         if let outputImage = filter.outputImage, let cgImage = context.createCGImage(outputImage, from: ciImage.extent){
-            return UIImage(cgImage: cgImage)
+            return cgImage
         }
         return nil
     }
     
     // Filters to sharpen the image
-    private func enhanceWithSharpen(image: UIImage) -> UIImage?{
+    private func enhanceWithSharpen(image: UIImage) -> CGImage?{
         guard let ciImage = CIImage(image: image) else{ return nil }
         let context = CIContext(options: nil)
         let filter = CIFilter.sharpenLuminance()
         filter.inputImage = ciImage
         filter.sharpness = 2.0 // A strong sharpen value
         if let outputImage = filter.outputImage, let cgImage = context.createCGImage(outputImage, from: outputImage.extent){
-            return UIImage(cgImage: cgImage)
+            return cgImage
         }
         return nil
     }
     
-    // NEW: Filter for a high-contrast "noir" effect which is good for text
-    private func enhanceWithNoir(image: UIImage) -> UIImage? {
+    // Filters for a high-contrast "noir" effect which is good for text
+    private func enhanceWithNoir(image: UIImage) -> CGImage?{
         guard let ciImage = CIImage(image: image) else { return nil }
         let context = CIContext(options: nil)
         let filter = CIFilter.photoEffectNoir()
         filter.inputImage = ciImage
-        if let outputImage = filter.outputImage, let cgImage = context.createCGImage(outputImage, from: outputImage.extent) {
-            return UIImage(cgImage: cgImage)
+        if let outputImage = filter.outputImage, let cgImage = context.createCGImage(outputImage, from: outputImage.extent){
+            return cgImage
         }
         return nil
     }
 
     // Core text recognition function
-    private func recognizeText(in cgImage: CGImage, completion: @escaping ([[Int]]) -> Void){
+    private func recognizeText(in cgImage: CGImage, orientation: UIImage.Orientation, completion: @escaping ([[Int]]) -> Void){
+        let visionOrientation = CGImagePropertyOrientation(orientation)
         // Performs the Vision request on the image
-        let requestHandler = VNImageRequestHandler(cgImage: cgImage)
+        let requestHandler = VNImageRequestHandler(cgImage: cgImage, orientation: visionOrientation)
         
         // Creates the text recognition request
         let request = VNRecognizeTextRequest { (request, error) in
@@ -155,12 +219,12 @@ class GridProcessor{
             for observation in observations{
                 // Gets the most likely candidate for the text and cleans it
                 guard let candidate = observation.topCandidates(1).first,
-                      let digit = Int(candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)) else { continue }
+                      let digit = Int(candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)) else{ continue }
                 
                 let boundingBox = VNImageRectForNormalizedRect(observation.boundingBox, Int(frame.width), Int(frame.height))
                 let center = CGPoint(x: boundingBox.midX, y: boundingBox.midY)
                 
-                // FIX: Correctly calculate the row based on Vision's coordinate system (origin is bottom-left for normalized rects)
+                // Correctly calculate the row based on Vision's coordinate system
                 let row = Int((frame.height - center.y) / cellHeight)
                 let col = Int(center.x / cellWidth)
                 
