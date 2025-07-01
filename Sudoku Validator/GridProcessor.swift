@@ -26,6 +26,10 @@ class GridProcessor{
         if let sharpenedCgImage = enhanceWithSharpen(image: image)?.cgImage{
             imageVersions.append(sharpenedCgImage)
         }
+        // NEW: Noir filter to improve text distinction
+        if let noirCgImage = enhanceWithNoir(image: image)?.cgImage {
+            imageVersions.append(noirCgImage)
+        }
 
         // Stores the grid results from each of the recognition passes
         var recognizedGrids: [[[Int]]] = []
@@ -114,6 +118,18 @@ class GridProcessor{
         }
         return nil
     }
+    
+    // NEW: Filter for a high-contrast "noir" effect which is good for text
+    private func enhanceWithNoir(image: UIImage) -> UIImage? {
+        guard let ciImage = CIImage(image: image) else { return nil }
+        let context = CIContext(options: nil)
+        let filter = CIFilter.photoEffectNoir()
+        filter.inputImage = ciImage
+        if let outputImage = filter.outputImage, let cgImage = context.createCGImage(outputImage, from: outputImage.extent) {
+            return UIImage(cgImage: cgImage)
+        }
+        return nil
+    }
 
     // Core text recognition function
     private func recognizeText(in cgImage: CGImage, completion: @escaping ([[Int]]) -> Void){
@@ -137,12 +153,17 @@ class GridProcessor{
             
             // Loops through every piece of text of the Vision framework found
             for observation in observations{
-                // Gets the most likely candidate for the text
-                guard let candidate = observation.topCandidates(1).first, let digit = Int(candidate.string) else{ continue }
+                // Gets the most likely candidate for the text and cleans it
+                guard let candidate = observation.topCandidates(1).first,
+                      let digit = Int(candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)) else { continue }
+                
                 let boundingBox = VNImageRectForNormalizedRect(observation.boundingBox, Int(frame.width), Int(frame.height))
                 let center = CGPoint(x: boundingBox.midX, y: boundingBox.midY)
-                let row = 8 - Int(center.y / cellHeight)
+                
+                // FIX: Correctly calculate the row based on Vision's coordinate system (origin is bottom-left for normalized rects)
+                let row = Int((frame.height - center.y) / cellHeight)
                 let col = Int(center.x / cellWidth)
+                
                 if row >= 0 && row < 9 && col >= 0 && col < 9{
                     if grid[row][col] == 0{ grid[row][col] = digit }
                 }
