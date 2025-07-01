@@ -193,6 +193,32 @@ class GridProcessor{
         }
         return nil
     }
+    
+    // Adds a new filter for dilation and erosion to enhance text
+    private func enhanceWithDilationAndErosion(image: UIImage) -> CGImage?{
+        guard let ciImage = CIImage(image: image) else{ return nil }
+        let context = CIContext(options: nil)
+
+        // Creates a grayscale version of the image first
+        let grayscaleFilter = CIFilter.colorControls()
+        grayscaleFilter.inputImage = ciImage
+        grayscaleFilter.saturation = 0
+        grayscaleFilter.contrast = 2.0 // Moderate contrast
+
+        guard let grayscaleOutput = grayscaleFilter.outputImage else{ return nil }
+
+        // Applies dilation to thicken the text
+        let dilationFilter = CIFilter.morphologyMaximum()
+        dilationFilter.inputImage = grayscaleOutput
+        dilationFilter.radius = 1.0
+
+        guard let dilatedOutput = dilationFilter.outputImage else{ return nil }
+
+        if let cgImage = context.createCGImage(dilatedOutput, from: dilatedOutput.extent){
+            return cgImage
+        }
+        return nil
+    }
 
     // Core text recognition function
     private func recognizeText(in cgImage: CGImage, orientation: UIImage.Orientation, completion: @escaping ([[Int]]) -> Void){
