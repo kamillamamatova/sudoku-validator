@@ -59,6 +59,10 @@ class GridProcessor{
         if let noirCgImage = enhanceWithNoir(image: image){
             imageVersions.append(noirCgImage)
         }
+        // ADDED: New dilation and erosion filter
+        if let dilatedCgImage = enhanceWithDilationAndErosion(image: image){
+            imageVersions.append(dilatedCgImage)
+        }
 
         var recognizedGrids: [[[Int]]] = []
         let dispatchGroup = DispatchGroup()
@@ -74,7 +78,7 @@ class GridProcessor{
             }
         }
 
-        dispatchGroup.notify(queue: .main){
+        dispatchGroup.notify(queue: .main) {
             let finalGrid = self.merge(grids: recognizedGrids)
             completion(finalGrid)
         }
