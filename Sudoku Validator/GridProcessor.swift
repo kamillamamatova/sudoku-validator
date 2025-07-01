@@ -225,7 +225,7 @@ class GridProcessor{
     }
 
     // Core text recognition function
-    private func recognizeText(in cgImage: CGImage, orientation: UIImage.Orientation, completion: @escaping ([[Int]]) -> Void){
+    private func recognizeText(in cgImage: CGImage, orientation: UIImage.Orientation, completion: @escaping ([[Int]]) -> Void) {
         let visionOrientation = CGImagePropertyOrientation(orientation)
         // Performs the Vision request on the image
         let requestHandler = VNImageRequestHandler(cgImage: cgImage, orientation: visionOrientation)
@@ -235,7 +235,7 @@ class GridProcessor{
             // Creates an empty grid to fill in with results
             var grid = Array(repeating: Array(repeating: 0, count: 9), count: 9)
             // Ensures the observations have no errors
-            guard let observations = request.results as? [VNRecognizedTextObservation], error == nil else{
+            guard let observations = request.results as? [VNRecognizedTextObservation], error == nil else {
                 completion(grid)
                 return
             }
@@ -246,37 +246,37 @@ class GridProcessor{
             let cellHeight = frame.height / 9.0
             
             // Loops through every piece of text of the Vision framework found
-            for observation in observations{
+            for observation in observations {
                 // Gets the most likely candidate for the text and cleans it
                 guard let candidate = observation.topCandidates(1).first,
-                      let digit = Int(candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)) else{ continue }
+                      let digit = Int(candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)) else { continue }
                 
                 let boundingBox = VNImageRectForNormalizedRect(observation.boundingBox, Int(frame.width), Int(frame.height))
                 let center = CGPoint(x: boundingBox.midX, y: boundingBox.midY)
                 
-                // Calculates the row based on Vision's coordinate system
+                // Correctly calculate the row based on Vision's coordinate system
                 let row = Int((frame.height - center.y) / cellHeight)
                 let col = Int(center.x / cellWidth)
                 
-                if row >= 0 && row < 9 && col >= 0 && col < 9{
-                    if grid[row][col] == 0{ grid[row][col] = digit }
+                if row >= 0 && row < 9 && col >= 0 && col < 9 {
+                    if grid[row][col] == 0 { grid[row][col] = digit }
                 }
             }
             completion(grid)
         }
         
-        if #available(iOS 16.0, *){ request.revision = VNRecognizeTextRequestRevision3 }
+        if #available(iOS 16.0, *) { request.revision = VNRecognizeTextRequestRevision3 }
         request.recognitionLevel = .accurate
-        // Enables language correction to improve recognition
         request.usesLanguageCorrection = true
-        request.minimumTextHeight = 0.01
+        // MODIFIED: Lowered minimumTextHeight to recognize smaller numbers
+        request.minimumTextHeight = 0.005
         request.customWords = ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
         
-        DispatchQueue.global(qos: .userInitiated).async{
-            do{
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
                 try requestHandler.perform([request])
             }
-            catch{
+            catch {
                 completion(Array(repeating: Array(repeating: 0, count: 9), count: 9))
             }
         }
